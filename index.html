@@ -1,0 +1,121 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resonance — A Valentine's Experience</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&family=Plus+Jakarta+Sans:wght@200;300;400;600&family=Dancing+Script:wght@400;700&display=swap');
+    
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      overflow: hidden;
+      background: #0a0f1d; /* Darker, more cinematic navy */
+      /* Subtle film-grade color correction */
+      filter: contrast(1.05) brightness(0.95) saturate(1.1);
+    }
+
+    /* Atmospheric Aura Orbs - More "Liquid" */
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(100px);
+      z-index: 0;
+      opacity: 0.4;
+      animation: drift linear infinite;
+      mix-blend-mode: screen;
+    }
+
+    @keyframes drift {
+      0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+      33% { transform: translate(50px, -80px) scale(1.2) rotate(120deg); }
+      66% { transform: translate(-40px, 40px) scale(0.8) rotate(240deg); }
+      100% { transform: translate(0, 0) scale(1) rotate(360deg); }
+    }
+
+    .grain::before {
+      content: "";
+      position: fixed;
+      top: -100%;
+      left: -100%;
+      width: 300%;
+      height: 300%;
+      background-image: url("https://www.transparenttextures.com/patterns/stardust.png");
+      opacity: 0.12; /* Slightly more visible texture */
+      pointer-events: none;
+      z-index: 50;
+      animation: noise 8s steps(10) infinite;
+    }
+
+    @keyframes noise {
+      0% { transform: translate(0,0); }
+      50% { transform: translate(-3%, 3%); }
+      100% { transform: translate(3%, -3%); }
+    }
+
+    .font-serif-luxury {
+      font-family: 'Playfair Display', serif;
+      letter-spacing: -0.01em;
+    }
+
+    .velvet-card {
+      background: rgba(255, 255, 255, 0.04);
+      backdrop-filter: blur(30px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.7);
+      perspective: 1000px;
+    }
+
+    /* Ripple Effect */
+    .ripple {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(226, 177, 122, 0.2);
+      transform: scale(0);
+      animation: ripple-animation 0.8s ease-out;
+      pointer-events: none;
+      z-index: 5;
+    }
+
+    @keyframes ripple-animation {
+      to {
+        transform: scale(4);
+        opacity: 0;
+      }
+    }
+
+    .nav-line {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(226, 177, 122, 0.4), transparent);
+    }
+
+    .custom-scrollbar::-webkit-scrollbar { width: 2px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(226, 177, 122, 0.2); }
+
+    @keyframes fadeInSlide {
+      from { opacity: 0; transform: translateY(20px); filter: blur(8px); }
+      to { opacity: 1; transform: translateY(0); filter: blur(0); }
+    }
+
+    .animate-entry {
+      animation: fadeInSlide 1.2s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+    }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/"
+  }
+}
+</script>
+</head>
+<body class="grain">
+  <div id="root"></div>
+</body>
+</html>
