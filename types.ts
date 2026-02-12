@@ -6,6 +6,7 @@ export interface RecipeCardData {
   message?: string;
   emoji?: string;
   prepTimes?: { label: string; value: string }[];
+  definitions?: Record<string, string>;
 }
 
 export enum Direction {
