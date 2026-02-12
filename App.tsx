@@ -5,6 +5,36 @@ import FloatingHearts from './components/FloatingHearts';
 import { Direction } from './types';
 import { GoogleGenAI, Modality } from "@google/genai";
 
+// Audio Utility Functions
+function decodeBase64(base64: string) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function decodeAudioData(
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number,
+  numChannels: number,
+): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+}
+
 const App: React.FC = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState<Direction>(Direction.Next);
@@ -28,18 +58,23 @@ const App: React.FC = () => {
   const oscillatorsRef = useRef<OscillatorNode[]>([]);
 
   // --- Audio Synthesis Logic ---
-  const initAudio = useCallback(() => {
-    if (audioContextRef.current) return;
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const initAudio = useCallback(async () => {
+    if (audioContextRef.current) {
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+      return;
+    }
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
     audioContextRef.current = ctx;
 
     // Create Ambient Pad
     const mainGain = ctx.createGain();
-    mainGain.gain.value = 0; // Start silent
+    mainGain.gain.value = 0; 
     mainGain.connect(ctx.destination);
     ambientGainRef.current = mainGain;
 
-    const freqs = [110, 164.81, 220, 329.63]; // A2, E3, A3, E4 (Warm chords)
+    const freqs = [110, 164.81, 220, 329.63]; 
     freqs.forEach(f => {
       const osc = ctx.createOscillator();
       const oscGain = ctx.createGain();
@@ -74,9 +109,7 @@ const App: React.FC = () => {
   };
 
   const toggleMute = () => {
-    if (!audioContextRef.current) {
-      initAudio();
-    }
+    initAudio();
     const newMute = !isMuted;
     setIsMuted(newMute);
     if (ambientGainRef.current && audioContextRef.current) {
@@ -87,7 +120,7 @@ const App: React.FC = () => {
   const navigateTo = useCallback((index: number) => {
     if (isTransitioning || index === currentIndex) return;
     
-    initAudio(); // Ensure audio is ready
+    initAudio();
     playChime(index > currentIndex ? 660 : 440);
 
     if (activeSourceRef.current) {
@@ -118,14 +151,16 @@ const App: React.FC = () => {
     if (currentIndex > 0) navigateTo(currentIndex - 1);
   };
 
-  // --- Gemini TTS Logic with Ducking ---
   const speakCard = async () => {
     if (isReading || isLoadingVoice) return;
     
-    initAudio();
-    const apiKey = process.env.API_KEY;
+    await initAudio();
+    
+    // Resilient API Key access
+    const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : undefined;
+    
     if (!apiKey) {
-      setError("Voice unavailable: Missing API key.");
+      setError("Voice unavailable: API Key configuration error.");
       return;
     }
 
@@ -153,30 +188,16 @@ const App: React.FC = () => {
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
         const ctx = audioContextRef.current!;
-        const audioData = atob(base64Audio);
-        const arrayBuffer = new ArrayBuffer(audioData.length);
-        const view = new Uint8Array(arrayBuffer);
-        for (let i = 0; i < audioData.length; i++) {
-          view[i] = audioData.charCodeAt(i);
-        }
-
-        const safeLength = Math.floor(arrayBuffer.byteLength / 2) * 2;
-        const dataInt16 = new Int16Array(arrayBuffer.slice(0, safeLength));
-        
-        const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
-        const channelData = buffer.getChannelData(0);
-        for (let i = 0; i < dataInt16.length; i++) {
-          channelData[i] = dataInt16[i] / 32768.0;
-        }
+        const uint8Audio = decodeBase64(base64Audio);
+        const audioBuffer = await decodeAudioData(uint8Audio, ctx, 24000, 1);
 
         const source = ctx.createBufferSource();
-        source.buffer = buffer;
+        source.buffer = audioBuffer;
         const gainNode = ctx.createGain();
         gainNode.gain.value = 0.9;
         source.connect(gainNode);
         gainNode.connect(ctx.destination);
         
-        // Duck ambient music
         if (ambientGainRef.current) {
           ambientGainRef.current.gain.setTargetAtTime(0.03, ctx.currentTime, 0.5);
         }
@@ -185,7 +206,6 @@ const App: React.FC = () => {
         source.onended = () => {
           setIsReading(false);
           activeSourceRef.current = null;
-          // Restore ambient music
           if (ambientGainRef.current && !isMuted) {
             ambientGainRef.current.gain.setTargetAtTime(0.15, ctx.currentTime, 1.5);
           }
@@ -242,7 +262,7 @@ const App: React.FC = () => {
             onClick={(e) => {
               e.stopPropagation();
               setActiveDef(currentCard.definitions?.[part] || null);
-              playChime(1760); // High shimmer sound
+              playChime(1760);
             }}
             className="cursor-help text-[#e2b17a] font-serif-luxury italic border-b border-[#e2b17a]/30 hover:border-[#e2b17a] transition-all duration-300 relative group inline-block mx-0.5"
           >
@@ -261,7 +281,6 @@ const App: React.FC = () => {
     <div className="fixed inset-0 flex flex-col items-center justify-center p-6 overflow-hidden select-none bg-[#0a0f1d]">
       <FloatingHearts />
 
-      {/* Sound Aura Toggle */}
       <button 
         onClick={toggleMute}
         className="fixed top-8 left-8 z-30 flex items-center space-x-3 group"
@@ -282,7 +301,6 @@ const App: React.FC = () => {
         </span>
       </button>
 
-      {/* Main Artisan Card */}
       <div 
         ref={cardRef}
         onMouseMove={handleMouseMove}
@@ -319,12 +337,10 @@ const App: React.FC = () => {
           <div key={ripple.id} className="ripple" style={{ left: ripple.x - 50, top: ripple.y - 50, width: 100, height: 100 }} />
         ))}
 
-        {/* Action Controls */}
         <div className="absolute top-8 right-8 z-30 flex flex-col space-y-4 items-center">
           <button 
             onClick={(e) => { e.stopPropagation(); speakCard(); }}
             className={`p-3 rounded-full transition-all duration-500 ${isLoadingVoice ? 'text-[#e2b17a] animate-spin' : isReading ? 'text-[#e2b17a] scale-125' : 'text-white/20 hover:text-white/60 hover:scale-110'}`}
-            title="Listen to this card"
           >
             {isLoadingVoice ? (
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
@@ -336,7 +352,6 @@ const App: React.FC = () => {
           </button>
         </div>
 
-        {/* Card Header */}
         <div className="text-center mb-6 flex-shrink-0 animate-entry" style={{ transform: 'translateZ(50px)' }}>
           <h1 className="text-4xl md:text-[2.6rem] font-serif-luxury text-white font-normal italic mb-3 tracking-tight">
             {currentCard.title}
@@ -347,7 +362,6 @@ const App: React.FC = () => {
           </p>
         </div>
 
-        {/* Card Body */}
         <div className="flex-grow flex flex-col items-center justify-center overflow-y-auto custom-scrollbar px-2" style={{ transform: 'translateZ(30px)' }}>
           {currentCard.emoji && (
             <div className={`text-6xl mb-8 opacity-90 drop-shadow-[0_0_30px_rgba(255,255,255,0.2)] ${currentIndex === 0 ? 'animate-bounce' : 'animate-pulse'}`}>
@@ -398,7 +412,6 @@ const App: React.FC = () => {
           )}
         </div>
 
-        {/* Feedback Area */}
         {(activeDef || error) && (
           <div className="absolute inset-x-8 bottom-24 p-6 bg-white/5 backdrop-blur-2xl border border-white/10 rounded-2xl animate-entry text-center z-40">
              <p className={`text-[10px] uppercase tracking-[0.4em] mb-2 font-bold opacity-60 ${error ? 'text-red-400' : 'text-[#e2b17a]'}`}>
@@ -421,7 +434,6 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Navigation */}
       <div className="fixed bottom-12 w-full max-w-[460px] flex items-center justify-between px-10 z-20">
         <button
           onClick={goToPrev}
