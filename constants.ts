@@ -6,7 +6,7 @@ export const CARDS_DATA: RecipeCardData[] = [
     title: "Ineffable",
     subtitle: "Beyond the vocabulary",
     emoji: "🫧",
-    message: "I tried to write a script for this, but 'us' turned out to be something {Ineffable}—too big for a basic greeting card. It’s less of a meeting and more of a {Serendipity}; a lucky find I wasn't even looking for, but now can't imagine my day without.",
+    message: "I tried to write a script for this, Esther, but 'us' turned out to be something {Ineffable}—too big for a basic greeting card. It’s less of a meeting and more of a {Serendipity}; a lucky find I wasn't even looking for, but now can't imagine my day without.",
     definitions: {
       "Ineffable": "Too great to be expressed in words.",
       "Serendipity": "Finding something beautiful without looking for it."
@@ -16,9 +16,9 @@ export const CARDS_DATA: RecipeCardData[] = [
     title: "Iridescent",
     subtitle: "All your different lights",
     items: [
-      "The {Incandescent} way you explain things you’re passionate about",
+      "Esther, the {Incandescent} way you explain things you’re passionate about",
       "That {Ethereal}, quiet grace you have when the world gets too loud",
-      "Your {Iridescent} personality—how you can be a total dork and a genius in the same hour",
+      "Your {Iridescent} personality—how you can be completely radiant and a genius in the same hour",
       "The {Luminescence} in your eyes when we finally land on a joke only we get",
       "The {Halcyon} peace I feel just sitting in a car with you, saying absolutely nothing",
       "The way you find the beauty in being human, even in the messy, unscripted parts",
@@ -34,10 +34,26 @@ export const CARDS_DATA: RecipeCardData[] = [
     }
   },
   {
+    title: "Why You're Literally Unfair",
+    subtitle: "A breach of natural laws",
+    items: [
+      "Esther, your smile could end wars. I'm talking international peace treaties signed just because you walked in the room smiling.",
+      "When you laugh, flowers bloom out of season. Scientists are confused. Poets are scrambling to find new words.",
+      "Your voice doesn't just sound good - angels literally pause mid-song to take notes.",
+      "You're so beautiful that sunsets look at YOU for inspiration. The sunset is out here trying to match your glow and failing.",
+      "Your eyes could make a grown man forget his own name, his address, and every password he's ever created.",
+      "When you walk into church, the choir sounds better. This is documented. There's evidence.",
+      "Your beauty is the kind that makes people believe in magic again. You're proof that supernatural things exist.",
+      "If they made a movie about perfection, you'd sue them for copyright infringement.",
+      "You're so stunning that mirrors probably feel inadequate. Like they see you and think 'I'm not worthy of this reflection.'",
+      "Honestly, Esther, you existing is almost unfair to everyone else. You really just woke up one day and chose to be THIS extraordinary? Wild."
+    ]
+  },
+  {
     title: "Redamancy",
     subtitle: "The art of giving back",
     items: [
-      "Trade high-level philosophy for your suspiciously elite-tier memes",
+      "Trade high-level philosophy for your suspiciously elite-tier memes, Esther",
       "Practice {Redamancy}: the act of loving back with everything you've got",
       "Find {Felicity} in the tiny, boring moments—like choosing a movie for two hours",
       "Acknowledge that there is a profound beauty in being human and slightly chaotic",
@@ -55,7 +71,7 @@ export const CARDS_DATA: RecipeCardData[] = [
     title: "The Shift",
     subtitle: "From noise to resonance",
     prepTimes: [
-      { label: "The Serendipity", value: "Realizing you were the 'good thing' I wasn't even looking for" },
+      { label: "The Serendipity", value: "Realizing you, Esther, were the 'good thing' I wasn't even looking for" },
       { label: "The Halcyon", value: "Finding a rare, idyllic happiness in our most random conversations" },
       { label: "The Result", value: "Recognizing that there is such beauty in being human alongside you" }
     ]
@@ -64,7 +80,7 @@ export const CARDS_DATA: RecipeCardData[] = [
     title: "Final Note",
     subtitle: "Just human beauty",
     emoji: "🕯️",
-    message: "You are altogether beautiful, from your {Incandescent} mind to your very human quirks. Never forget that in all of it, there is beauty in being human. Happy Valentine's Day.",
+    message: "You are altogether beautiful, Esther, from your {Incandescent} mind to your very human quirks. Never forget that in all of it, there is beauty in being human. Happy Valentine's Day.",
     items: [
       "“You are altogether beautiful, my darling; there is no flaw in you.” — Song of Solomon 4:7"
     ],

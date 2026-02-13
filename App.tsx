@@ -97,7 +97,6 @@ const App: React.FC = () => {
       lpFilter.Q.value = 1.8;
       lpFilter.connect(masterGain);
 
-      // Deep Drone Layer
       const freqs = [55.00, 82.41, 110.00, 164.81]; 
       freqs.forEach((f) => {
         const osc = ctx.createOscillator();
@@ -111,7 +110,6 @@ const App: React.FC = () => {
         oscillatorsRef.current.push(osc);
       });
 
-      // LO-FI CRACKLE LAYER (Filtered Noise)
       const bufferSize = 2 * ctx.sampleRate;
       const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const output = noiseBuffer.getChannelData(0);
@@ -126,13 +124,12 @@ const App: React.FC = () => {
       noiseFilter.type = 'bandpass';
       noiseFilter.frequency.value = 3500;
       noiseFilter.Q.value = 0.5;
-      noiseGain.gain.value = 0.003; // Extremely subtle
+      noiseGain.gain.value = 0.003; 
       whiteNoise.connect(noiseFilter);
       noiseFilter.connect(noiseGain);
       noiseGain.connect(ctx.destination);
       whiteNoise.start();
 
-      // Slow Breathing LFO
       const lfo = ctx.createOscillator();
       const lfoGain = ctx.createGain();
       lfo.frequency.value = 0.06; 
@@ -340,6 +337,7 @@ const App: React.FC = () => {
   };
 
   const currentCard = CARDS_DATA[currentIndex];
+  const isUnfairCard = currentCard.title === "Why You're Literally Unfair";
 
   if (!isStarted) {
     return (
@@ -360,8 +358,12 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col items-center justify-center p-4 md:p-8 overflow-hidden select-none bg-[#03050a]">
-      <FloatingHearts />
+    <div className={`fixed inset-0 flex flex-col items-center justify-center p-4 md:p-8 overflow-hidden select-none transition-colors duration-[2000ms] ${isUnfairCard ? 'bg-[#1a0808]' : 'bg-[#03050a]'}`}>
+      <FloatingHearts isSpecial={isUnfairCard} />
+
+      {/* Background Aura for Unfair Card */}
+      <div className={`fixed inset-0 pointer-events-none transition-opacity duration-[3000ms] ${isUnfairCard ? 'opacity-30' : 'opacity-0'}`} 
+           style={{ background: 'radial-gradient(circle at center, #7a2222 0%, transparent 70%)' }} />
 
       {/* Header Controls */}
       <button 
@@ -408,9 +410,10 @@ const App: React.FC = () => {
           setTilt({ x: 0, y: 0 });
         }}
         onMouseDown={createRipple}
-        className={`relative w-full max-w-[480px] h-[88vh] max-h-[720px] velvet-card rounded-[3.5rem] z-20 p-12 md:p-16 flex flex-col transition-all duration-[1200ms] ease-[cubic-bezier(0.23,1,0.32,1)]
+        className={`relative w-full max-w-[520px] h-[90vh] max-h-[780px] velvet-card rounded-[3.5rem] z-20 p-10 md:p-14 flex flex-col transition-all duration-[1200ms] ease-[cubic-bezier(0.23,1,0.32,1)]
           ${isTransitioning ? (direction === Direction.Next ? 'translate-x-[-8%] opacity-0 scale-95 blur-2xl' : 'translate-x-[8%] opacity-0 scale-95 blur-2xl') : 'translate-x-0 opacity-100 scale-100 blur-0'}
           ${!isTransitioning ? 'animate-[pulse_25s_ease-in-out_infinite]' : ''}
+          ${isUnfairCard ? 'border-[#7a2222]/40 shadow-[0_40px_100px_-20px_rgba(122,34,34,0.3)]' : ''}
         `}
         style={{ 
           transform: `perspective(1800px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
@@ -418,7 +421,7 @@ const App: React.FC = () => {
         }}
       >
         {ripples.map(ripple => (
-          <div key={ripple.id} className="ripple" style={{ left: ripple.x - 50, top: ripple.y - 50 }} />
+          <div key={ripple.id} className="ripple" style={{ left: ripple.x - 50, top: ripple.y - 50, backgroundColor: isUnfairCard ? 'rgba(255,100,100,0.1)' : undefined }} />
         ))}
 
         <div className="absolute top-12 right-12 z-30 flex flex-col space-y-4 items-center">
@@ -436,8 +439,8 @@ const App: React.FC = () => {
           </button>
         </div>
 
-        <div className="text-center mb-12 flex-shrink-0 animate-entry">
-          <h1 className="text-4xl md:text-[3.2rem] font-serif-luxury text-white/95 font-normal italic mb-3 tracking-tight">
+        <div className="text-center mb-10 flex-shrink-0 animate-entry">
+          <h1 className={`text-3xl md:text-[2.8rem] font-serif-luxury text-white/95 font-normal italic mb-3 tracking-tight ${isUnfairCard ? 'drop-shadow-[0_0_20px_rgba(255,100,100,0.3)]' : ''}`}>
             {currentCard.title}
           </h1>
           <div className="nav-line w-full mb-4 opacity-5" />
@@ -446,25 +449,25 @@ const App: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex-grow flex flex-col items-center justify-center overflow-y-auto custom-scrollbar px-2 py-8">
+        <div className="flex-grow flex flex-col items-center justify-start overflow-y-auto custom-scrollbar px-2 py-4">
           {currentCard.emoji && (
-            <div className={`text-6xl md:text-8xl mb-16 opacity-30 drop-shadow-[0_0_60px_rgba(226,177,122,0.1)] ${currentIndex === 0 ? 'animate-bounce' : 'animate-pulse'}`}>
+            <div className={`text-6xl md:text-8xl mb-12 opacity-30 drop-shadow-[0_0_60px_rgba(226,177,122,0.1)] ${currentIndex === 0 ? 'animate-bounce' : 'animate-pulse'}`}>
               {currentCard.emoji}
             </div>
           )}
           
           {currentCard.message && (
-            <div className="text-white/80 text-center leading-[2.2] text-xl md:text-2xl font-serif-luxury italic mb-12 animate-entry px-6">
+            <div className="text-white/80 text-center leading-[2.2] text-lg md:text-xl font-serif-luxury italic mb-10 animate-entry px-6">
               "{renderInteractiveText(currentCard.message)}"
             </div>
           )}
 
-          <div className="w-full space-y-8">
+          <div className={`w-full ${isUnfairCard ? 'space-y-10 py-6' : 'space-y-8'}`}>
             {currentCard.items && currentCard.items.map((item, idx) => (
               <div 
                 key={`${currentIndex}-${idx}`}
-                className="flex flex-col items-center text-center opacity-0 animate-[fadeInSlide_1.8s_ease-out_forwards]"
-                style={{ animationDelay: `${idx * 0.25}s` }}
+                className={`flex flex-col items-center text-center opacity-0 ${isUnfairCard ? 'animate-[fadeInSlide_2.5s_ease-out_forwards]' : 'animate-[fadeInSlide_1.8s_ease-out_forwards]'}`}
+                style={{ animationDelay: `${isUnfairCard ? idx * 0.8 : idx * 0.25}s` }}
               >
                 {currentIndex === CARDS_DATA.length - 1 ? (
                    <span className="text-white/90 text-2xl md:text-4xl font-serif-luxury px-10 py-12 relative leading-snug italic opacity-80 block">
@@ -472,6 +475,13 @@ const App: React.FC = () => {
                     {item.replace(/“|”/g, '')}
                     <span className="absolute right-[-25px] bottom-0 text-7xl text-[#e2b17a] opacity-5">”</span>
                    </span>
+                ) : isUnfairCard ? (
+                  <div className="px-4 group max-w-[90%]">
+                    <span className="text-white/90 text-lg md:text-xl font-serif-luxury italic leading-relaxed tracking-tight group-hover:text-white transition-colors duration-700">
+                      {item}
+                    </span>
+                    <div className="nav-line w-12 mx-auto mt-6 opacity-5" />
+                  </div>
                 ) : (
                   <div className="flex items-center space-x-6 py-3 group">
                     <span className="text-[#e2b17a] opacity-10 font-serif-luxury text-[12px]">◆</span>
@@ -513,13 +523,13 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <div className="mt-auto pt-12 text-center text-[10px] uppercase tracking-[1em] text-white/5 font-black">
+        <div className="mt-auto pt-8 text-center text-[10px] uppercase tracking-[1em] text-white/5 font-black">
           Authentic Resonance
         </div>
       </div>
 
       {/* Navigation Controls */}
-      <div className="fixed bottom-16 w-full max-w-[480px] flex items-center justify-between px-16 z-30">
+      <div className="fixed bottom-12 w-full max-w-[480px] flex items-center justify-between px-16 z-30">
         <button
           onClick={goToPrev}
           disabled={currentIndex === 0 || isTransitioning}
@@ -554,7 +564,7 @@ const App: React.FC = () => {
         </button>
       </div>
 
-      <div className="fixed bottom-8 text-center w-full opacity-5 pointer-events-none z-0">
+      <div className="fixed bottom-6 text-center w-full opacity-5 pointer-events-none z-0">
         <p className="text-[10px] uppercase tracking-[2em] text-white/80 font-extralight">A Shared Presence</p>
       </div>
     </div>
