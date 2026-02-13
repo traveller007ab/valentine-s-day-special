@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CARDS_DATA } from './constants.ts';
 import FloatingHearts from './components/FloatingHearts.tsx';
@@ -41,6 +42,7 @@ async function decodeAudioData(
 }
 
 const App: React.FC = () => {
+  const [isStarted, setIsStarted] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [direction, setDirection] = useState<Direction>(Direction.Next);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -50,7 +52,7 @@ const App: React.FC = () => {
   const [isLoadingVoice, setIsLoadingVoice] = useState(false);
   const [activeDef, setActiveDef] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
   
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
@@ -60,7 +62,6 @@ const App: React.FC = () => {
   const customAudioRef = useRef<HTMLAudioElement | null>(null);
   
   const ambientGainRef = useRef<GainNode | null>(null);
-  const filterRef = useRef<BiquadFilterNode | null>(null);
   const oscillatorsRef = useRef<OscillatorNode[]>([]);
 
   const initAudio = useCallback(async () => {
@@ -86,36 +87,56 @@ const App: React.FC = () => {
       customAudioRef.current = audio;
       const source = ctx.createMediaElementSource(audio);
       source.connect(masterGain);
-      audio.play().catch(() => console.warn("Auto-play blocked until user interaction."));
+      audio.play().catch(() => console.warn("Background audio suppressed."));
     } 
     else {
-      // PROCEDURAL WARM PAD - DEEPER & DARKER
+      // PROCEDURAL WARM PAD & LO-FI TEXTURE
       const lpFilter = ctx.createBiquadFilter();
       lpFilter.type = 'lowpass';
-      lpFilter.frequency.value = 220; // Deep warmth
-      lpFilter.Q.value = 2.0; // Resonant but filtered
+      lpFilter.frequency.value = 200; 
+      lpFilter.Q.value = 1.8;
       lpFilter.connect(masterGain);
-      filterRef.current = lpFilter;
 
-      // Lower Register Chord (Sub-bass and Low Mids)
-      const freqs = [55.00, 82.41, 103.83, 110.00, 164.81]; 
+      // Deep Drone Layer
+      const freqs = [55.00, 82.41, 110.00, 164.81]; 
       freqs.forEach((f) => {
         const osc = ctx.createOscillator();
         const oscGain = ctx.createGain();
         osc.type = 'sine';
-        osc.frequency.value = f + (Math.random() * 0.5 - 0.25);
-        oscGain.gain.value = 0.08;
+        osc.frequency.value = f + (Math.random() * 0.4 - 0.2);
+        oscGain.gain.value = 0.12;
         osc.connect(oscGain);
         oscGain.connect(lpFilter);
         osc.start();
         oscillatorsRef.current.push(osc);
       });
 
-      // Ultra-Slow Breathing LFO
+      // LO-FI CRACKLE LAYER (Filtered Noise)
+      const bufferSize = 2 * ctx.sampleRate;
+      const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+      const whiteNoise = ctx.createBufferSource();
+      whiteNoise.buffer = noiseBuffer;
+      whiteNoise.loop = true;
+      const noiseGain = ctx.createGain();
+      const noiseFilter = ctx.createBiquadFilter();
+      noiseFilter.type = 'bandpass';
+      noiseFilter.frequency.value = 3500;
+      noiseFilter.Q.value = 0.5;
+      noiseGain.gain.value = 0.003; // Extremely subtle
+      whiteNoise.connect(noiseFilter);
+      noiseFilter.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
+      whiteNoise.start();
+
+      // Slow Breathing LFO
       const lfo = ctx.createOscillator();
       const lfoGain = ctx.createGain();
-      lfo.frequency.value = 0.05; // 20 second breath cycle
-      lfoGain.gain.value = 100; 
+      lfo.frequency.value = 0.06; 
+      lfoGain.gain.value = 80; 
       lfo.connect(lfoGain);
       lfoGain.connect(lpFilter.frequency);
       lfo.start();
@@ -126,6 +147,12 @@ const App: React.FC = () => {
     }
   }, [isMuted]);
 
+  const handleStart = async () => {
+    await initAudio();
+    setIsStarted(true);
+    playChime(220);
+  };
+
   const playChime = (freq = 440) => {
     if (isMuted || !audioContextRef.current) return;
     const ctx = audioContextRef.current;
@@ -134,17 +161,16 @@ const App: React.FC = () => {
     
     osc.type = 'sine';
     osc.frequency.setValueAtTime(freq, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(freq * 0.98, ctx.currentTime + 2.5);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.96, ctx.currentTime + 3);
     
-    // Softer felt-mallet envelope
     gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.03, ctx.currentTime + 0.3); // Slow attack
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.5);
+    gain.gain.linearRampToValueAtTime(0.025, ctx.currentTime + 0.4); 
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 3);
     
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    osc.stop(ctx.currentTime + 2.5);
+    osc.stop(ctx.currentTime + 3);
   };
 
   const toggleMute = () => {
@@ -152,7 +178,7 @@ const App: React.FC = () => {
     const newMute = !isMuted;
     setIsMuted(newMute);
     if (ambientGainRef.current && audioContextRef.current) {
-      ambientGainRef.current.gain.setTargetAtTime(newMute ? 0 : 0.08, audioContextRef.current.currentTime, 2.5);
+      ambientGainRef.current.gain.setTargetAtTime(newMute ? 0 : 0.08, audioContextRef.current.currentTime, 3);
     }
   };
 
@@ -160,7 +186,7 @@ const App: React.FC = () => {
     if (isTransitioning || index === currentIndex) return;
     
     initAudio();
-    playChime(index > currentIndex ? 330 : 220); // Much lower pitched navigation
+    playChime(index > currentIndex ? 330 : 220); 
 
     if (activeSourceRef.current) {
       try { activeSourceRef.current.stop(); } catch(e) {}
@@ -178,7 +204,7 @@ const App: React.FC = () => {
     setTimeout(() => {
       setCurrentIndex(index);
       setIsTransitioning(false);
-    }, 700);
+    }, 800);
   }, [currentIndex, isTransitioning, initAudio]);
 
   const goToNext = () => {
@@ -197,7 +223,7 @@ const App: React.FC = () => {
     const apiKey = process.env.API_KEY;
     
     if (!apiKey) {
-      setError("AI voice configuration is pending.");
+      setError("Audio resonance not configured.");
       return;
     }
 
@@ -211,7 +237,7 @@ const App: React.FC = () => {
       
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: `Speak this in a warm, low, soothing, intimate whisper, very slowly: ${textToSpeak}` }] }],
+        contents: [{ parts: [{ text: `Speak this in a warm, low, soothing, intimate whisper, very slowly and emotionally: ${textToSpeak}` }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
@@ -237,7 +263,7 @@ const App: React.FC = () => {
         voiceGain.connect(ctx.destination);
         
         if (ambientGainRef.current) {
-          ambientGainRef.current.gain.setTargetAtTime(0.01, ctx.currentTime, 1.5);
+          ambientGainRef.current.gain.setTargetAtTime(0.005, ctx.currentTime, 2);
         }
 
         activeSourceRef.current = source;
@@ -267,7 +293,7 @@ const App: React.FC = () => {
     const clientY = 'touches' in e ? (e as React.TouchEvent).touches[0].clientY : (e as React.MouseEvent).clientY;
     const x = ((clientX - rect.left) / rect.width) - 0.5;
     const y = ((clientY - rect.top) / rect.height) - 0.5;
-    setTilt({ x: y * 4, y: -x * 4 });
+    setTilt({ x: y * 3.5, y: -x * 3.5 });
   };
 
   const createRipple = (e: React.MouseEvent | React.TouchEvent) => {
@@ -277,8 +303,8 @@ const App: React.FC = () => {
     const y = ('touches' in e ? (e as React.TouchEvent).touches[0].clientY : (e as React.MouseEvent).clientY) - rect.top;
     const id = Date.now();
     setRipples(prev => [...prev, { id, x, y }]);
-    setTimeout(() => setRipples(prev => prev.filter(r => r.id !== id)), 1000);
-    playChime(550); 
+    setTimeout(() => setRipples(prev => prev.filter(r => r.id !== id)), 1200);
+    playChime(660); 
   };
 
   useEffect(() => {
@@ -300,12 +326,12 @@ const App: React.FC = () => {
             onClick={(e) => {
               e.stopPropagation();
               setActiveDef(currentCard.definitions?.[part] || null);
-              playChime(660);
+              playChime(550);
             }}
-            className="cursor-help text-[#e2b17a] font-serif-luxury italic border-b border-[#e2b17a]/20 hover:border-[#e2b17a]/60 transition-all duration-700 relative group inline-block mx-0.5"
+            className="cursor-help text-[#e2b17a] font-serif-luxury italic border-b border-[#e2b17a]/10 hover:border-[#e2b17a]/50 transition-all duration-1000 relative group inline-block mx-0.5"
           >
             {part}
-            <span className="absolute -inset-1 bg-[#e2b17a]/5 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity blur-[8px]" />
+            <span className="absolute -inset-1 bg-[#e2b17a]/5 rounded-sm opacity-0 group-hover:opacity-100 transition-opacity blur-[10px]" />
           </span>
         );
       }
@@ -315,32 +341,50 @@ const App: React.FC = () => {
 
   const currentCard = CARDS_DATA[currentIndex];
 
+  if (!isStarted) {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-[#03050a] z-[100] p-8 text-center cursor-pointer" onClick={handleStart}>
+        <FloatingHearts />
+        <div className="relative z-10 animate-entry">
+          <p className="text-[#e2b17a]/60 uppercase tracking-[1em] text-[10px] font-black mb-8 animate-pulse">Presence Required</p>
+          <h1 className="text-4xl md:text-6xl text-white/90 font-serif-luxury italic mb-12 tracking-tight">Resonance</h1>
+          <button 
+            className="group relative px-10 py-4 bg-white/[0.03] border border-white/[0.1] rounded-full overflow-hidden transition-all duration-700 hover:border-[#e2b17a]/40"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+            <span className="relative text-[10px] uppercase tracking-[0.6em] text-white/40 group-hover:text-[#e2b17a] transition-colors font-black">Enter the Experience</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 flex flex-col items-center justify-center p-4 md:p-8 overflow-hidden select-none bg-[#03050a]">
       <FloatingHearts />
 
-      {/* Header Overlay Toggle */}
+      {/* Header Controls */}
       <button 
         onClick={toggleMute}
-        className="fixed top-6 left-6 z-40 flex items-center space-x-3 group bg-black/40 backdrop-blur-3xl px-6 py-3 rounded-full border border-white/5 hover:border-white/10 transition-all shadow-2xl"
+        className="fixed top-8 left-8 z-40 flex items-center space-x-4 group bg-black/40 backdrop-blur-[60px] px-6 py-3.5 rounded-full border border-white/5 hover:border-white/10 transition-all shadow-2xl"
       >
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-1000 ${isMuted ? 'text-white/5' : 'text-[#e2b17a]/60 drop-shadow-[0_0_12px_rgba(226,177,122,0.3)]'}`}>
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all duration-1000 ${isMuted ? 'text-white/5' : 'text-[#e2b17a]/40'}`}>
           {isMuted ? (
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>
           ) : (
             <div className="flex items-center space-x-1">
               {[1, 2, 3].map(i => (
-                <div key={i} className={`w-0.5 bg-current rounded-full animate-[soundWave_2.5s_ease-in-out_infinite]`} style={{ height: `${i*3}px`, animationDelay: `${i*0.4}s` }} />
+                <div key={i} className={`w-0.5 bg-current rounded-full animate-[soundWave_3s_ease-in-out_infinite]`} style={{ height: `${i*3}px`, animationDelay: `${i*0.6}s` }} />
               ))}
             </div>
           )}
         </div>
-        <span className={`text-[9px] uppercase tracking-[0.6em] transition-opacity duration-1000 font-light ${isMuted ? 'opacity-10' : 'opacity-40 text-[#e2b17a]'}`}>
-          {isMuted ? 'Silent' : 'Resonating'}
+        <span className={`text-[9px] uppercase tracking-[0.8em] transition-opacity duration-1000 font-black ${isMuted ? 'opacity-10' : 'opacity-30 text-[#e2b17a]'}`}>
+          {isMuted ? 'Muted' : 'Aura Active'}
         </span>
       </button>
 
-      {/* Main Artisan Card Container */}
+      {/* Main Card */}
       <div 
         ref={cardRef}
         onMouseMove={handleMouseMove}
@@ -364,74 +408,74 @@ const App: React.FC = () => {
           setTilt({ x: 0, y: 0 });
         }}
         onMouseDown={createRipple}
-        className={`relative w-full max-w-[460px] h-[85vh] max-h-[700px] velvet-card rounded-[3rem] z-20 p-10 md:p-14 flex flex-col transition-all duration-1000 ease-[cubic-bezier(0.23,1,0.32,1)]
-          ${isTransitioning ? (direction === Direction.Next ? 'translate-x-[-10%] opacity-0 scale-95 blur-2xl' : 'translate-x-[10%] opacity-0 scale-95 blur-2xl') : 'translate-x-0 opacity-100 scale-100 blur-0'}
-          ${!isTransitioning ? 'animate-[pulse_20s_ease-in-out_infinite]' : ''}
+        className={`relative w-full max-w-[480px] h-[88vh] max-h-[720px] velvet-card rounded-[3.5rem] z-20 p-12 md:p-16 flex flex-col transition-all duration-[1200ms] ease-[cubic-bezier(0.23,1,0.32,1)]
+          ${isTransitioning ? (direction === Direction.Next ? 'translate-x-[-8%] opacity-0 scale-95 blur-2xl' : 'translate-x-[8%] opacity-0 scale-95 blur-2xl') : 'translate-x-0 opacity-100 scale-100 blur-0'}
+          ${!isTransitioning ? 'animate-[pulse_25s_ease-in-out_infinite]' : ''}
         `}
         style={{ 
-          transform: `perspective(1500px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
+          transform: `perspective(1800px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
           transformStyle: 'preserve-3d'
         }}
       >
         {ripples.map(ripple => (
-          <div key={ripple.id} className="ripple" style={{ left: ripple.x - 50, top: ripple.y - 50, width: 100, height: 100 }} />
+          <div key={ripple.id} className="ripple" style={{ left: ripple.x - 50, top: ripple.y - 50 }} />
         ))}
 
-        <div className="absolute top-10 right-10 z-30 flex flex-col space-y-4 items-center">
+        <div className="absolute top-12 right-12 z-30 flex flex-col space-y-4 items-center">
           <button 
             onClick={(e) => { e.stopPropagation(); speakCard(); }}
-            className={`p-4 rounded-full transition-all duration-1000 bg-white/[0.02] border border-white/[0.03] hover:bg-white/[0.05] ${isLoadingVoice ? 'text-[#e2b17a] animate-spin' : isReading ? 'text-[#e2b17a] scale-110 shadow-[0_0_30px_rgba(226,177,122,0.2)]' : 'text-white/10'}`}
+            className={`p-5 rounded-full transition-all duration-1000 bg-white/[0.01] border border-white/[0.03] hover:bg-white/[0.04] hover:border-white/[0.08] ${isLoadingVoice ? 'text-[#e2b17a] animate-spin' : isReading ? 'text-[#e2b17a] scale-110 shadow-[0_0_40px_rgba(226,177,122,0.1)]' : 'text-white/10'}`}
           >
             {isLoadingVoice ? (
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
             ) : isReading ? (
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v10h-2z"/></svg>
             ) : (
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="1"><path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" /></svg>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="0.8"><path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z" /></svg>
             )}
           </button>
         </div>
 
-        <div className="text-center mb-10 flex-shrink-0 animate-entry">
-          <h1 className="text-4xl md:text-[3rem] font-serif-luxury text-white/90 font-normal italic mb-3 tracking-tighter">
+        <div className="text-center mb-12 flex-shrink-0 animate-entry">
+          <h1 className="text-4xl md:text-[3.2rem] font-serif-luxury text-white/95 font-normal italic mb-3 tracking-tight">
             {currentCard.title}
           </h1>
-          <div className="nav-line w-full mb-4 opacity-10" />
-          <p className="text-[#e2b17a]/60 uppercase tracking-[0.8em] text-[8px] font-black">
+          <div className="nav-line w-full mb-4 opacity-5" />
+          <p className="text-[#e2b17a]/50 uppercase tracking-[1em] text-[8px] font-black">
             {currentCard.subtitle}
           </p>
         </div>
 
-        <div className="flex-grow flex flex-col items-center justify-center overflow-y-auto custom-scrollbar px-2 py-6">
+        <div className="flex-grow flex flex-col items-center justify-center overflow-y-auto custom-scrollbar px-2 py-8">
           {currentCard.emoji && (
-            <div className={`text-6xl md:text-7xl mb-12 opacity-40 drop-shadow-[0_0_50px_rgba(226,177,122,0.15)] ${currentIndex === 0 ? 'animate-bounce' : 'animate-pulse'}`}>
+            <div className={`text-6xl md:text-8xl mb-16 opacity-30 drop-shadow-[0_0_60px_rgba(226,177,122,0.1)] ${currentIndex === 0 ? 'animate-bounce' : 'animate-pulse'}`}>
               {currentCard.emoji}
             </div>
           )}
           
           {currentCard.message && (
-            <div className="text-white/80 text-center leading-[2] text-xl md:text-2xl font-serif-luxury italic mb-10 animate-entry px-4">
+            <div className="text-white/80 text-center leading-[2.2] text-xl md:text-2xl font-serif-luxury italic mb-12 animate-entry px-6">
               "{renderInteractiveText(currentCard.message)}"
             </div>
           )}
 
-          <div className="w-full space-y-6">
+          <div className="w-full space-y-8">
             {currentCard.items && currentCard.items.map((item, idx) => (
               <div 
                 key={`${currentIndex}-${idx}`}
-                className="flex flex-col items-center text-center opacity-0 animate-[fadeInSlide_1.5s_ease-out_forwards]"
-                style={{ animationDelay: `${idx * 0.2}s` }}
+                className="flex flex-col items-center text-center opacity-0 animate-[fadeInSlide_1.8s_ease-out_forwards]"
+                style={{ animationDelay: `${idx * 0.25}s` }}
               >
                 {currentIndex === CARDS_DATA.length - 1 ? (
-                   <span className="text-white/90 text-2xl md:text-3xl font-serif-luxury px-8 py-10 relative leading-snug italic opacity-80 block">
-                    <span className="absolute left-[-20px] top-0 text-6xl text-[#e2b17a] opacity-10">“</span>
+                   <span className="text-white/90 text-2xl md:text-4xl font-serif-luxury px-10 py-12 relative leading-snug italic opacity-80 block">
+                    <span className="absolute left-[-25px] top-0 text-7xl text-[#e2b17a] opacity-5">“</span>
                     {item.replace(/“|”/g, '')}
-                    <span className="absolute right-[-20px] bottom-0 text-6xl text-[#e2b17a] opacity-10">”</span>
+                    <span className="absolute right-[-25px] bottom-0 text-7xl text-[#e2b17a] opacity-5">”</span>
                    </span>
                 ) : (
-                  <div className="flex items-center space-x-5 py-2 group">
-                    <span className="text-[#e2b17a] opacity-20 font-serif-luxury text-[10px]">◆</span>
-                    <span className="text-white/70 text-[15px] font-light tracking-widest leading-relaxed">
+                  <div className="flex items-center space-x-6 py-3 group">
+                    <span className="text-[#e2b17a] opacity-10 font-serif-luxury text-[12px]">◆</span>
+                    <span className="text-white/60 text-[15px] font-light tracking-[0.15em] leading-relaxed">
                       {renderInteractiveText(item)}
                     </span>
                   </div>
@@ -441,11 +485,11 @@ const App: React.FC = () => {
           </div>
 
           {currentCard.prepTimes && (
-            <div className="w-full space-y-12 mt-8 text-center">
+            <div className="w-full space-y-16 mt-12 text-center">
               {currentCard.prepTimes.map((time, idx) => (
-                <div key={idx} className="opacity-0 animate-[fadeInSlide_1.5s_ease-out_forwards]" style={{ animationDelay: `${idx * 0.3}s` }}>
-                  <p className="text-[9px] uppercase tracking-[0.6em] text-[#e2b17a]/40 font-black mb-3">{time.label}</p>
-                  <p className="text-white/80 text-2xl md:text-3xl font-serif-luxury italic leading-tight">{time.value}</p>
+                <div key={idx} className="opacity-0 animate-[fadeInSlide_1.8s_ease-out_forwards]" style={{ animationDelay: `${idx * 0.35}s` }}>
+                  <p className="text-[10px] uppercase tracking-[0.8em] text-[#e2b17a]/30 font-black mb-4">{time.label}</p>
+                  <p className="text-white/80 text-2xl md:text-4xl font-serif-luxury italic leading-tight tracking-tight">{time.value}</p>
                 </div>
               ))}
             </div>
@@ -453,47 +497,47 @@ const App: React.FC = () => {
         </div>
 
         {(activeDef || error) && (
-          <div className="absolute inset-x-8 bottom-28 p-8 bg-black/60 backdrop-blur-[60px] border border-white/5 rounded-[2.5rem] animate-entry text-center z-50 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.9)]">
-             <p className={`text-[10px] uppercase tracking-[0.5em] mb-3 font-black ${error ? 'text-rose-400' : 'text-[#e2b17a]/60'}`}>
-               {error ? 'Attention' : 'Deeper Echo'}
+          <div className="absolute inset-x-10 bottom-32 p-10 bg-black/70 backdrop-blur-[80px] border border-white/5 rounded-[3rem] animate-entry text-center z-50 shadow-[0_50px_100px_-25px_rgba(0,0,0,1)]">
+             <p className={`text-[11px] uppercase tracking-[0.6em] mb-4 font-black ${error ? 'text-rose-400' : 'text-[#e2b17a]/40'}`}>
+               {error ? 'Observation' : 'Essence'}
              </p>
-             <p className="text-white/90 text-[16px] font-serif-luxury italic leading-relaxed">
+             <p className="text-white/90 text-[18px] font-serif-luxury italic leading-relaxed tracking-tight">
                {error || activeDef}
              </p>
              <button 
               onClick={() => { setActiveDef(null); setError(null); }} 
-              className="mt-6 text-[9px] uppercase tracking-[0.7em] text-white/20 hover:text-white/60 transition-all py-3 px-8 border border-white/5 hover:border-white/10 rounded-full"
+              className="mt-8 text-[10px] uppercase tracking-[0.8em] text-white/20 hover:text-white/50 transition-all py-4 px-10 border border-white/5 hover:border-white/10 rounded-full"
              >
-               Dismiss
+               Return
              </button>
           </div>
         )}
 
-        <div className="mt-auto pt-10 text-center text-[9px] uppercase tracking-[0.8em] text-white/5 font-black">
-          Infinite Softness
+        <div className="mt-auto pt-12 text-center text-[10px] uppercase tracking-[1em] text-white/5 font-black">
+          Authentic Resonance
         </div>
       </div>
 
       {/* Navigation Controls */}
-      <div className="fixed bottom-12 w-full max-w-[460px] flex items-center justify-between px-12 z-30">
+      <div className="fixed bottom-16 w-full max-w-[480px] flex items-center justify-between px-16 z-30">
         <button
           onClick={goToPrev}
           disabled={currentIndex === 0 || isTransitioning}
-          className={`group flex items-center text-[11px] uppercase tracking-[0.5em] font-light transition-all duration-1000
+          className={`group flex items-center text-[12px] uppercase tracking-[0.6em] font-light transition-all duration-1000
             ${currentIndex === 0 ? 'opacity-0 pointer-events-none' : 'text-white/10 hover:text-[#e2b17a] hover:opacity-100'}
           `}
         >
-          <span className="mr-4 transition-transform group-hover:-translate-x-3 text-lg opacity-40">←</span> 
-          <span className="hidden md:inline">Back</span>
+          <span className="mr-6 transition-transform group-hover:-translate-x-4 text-xl opacity-20">←</span> 
+          <span className="hidden md:inline">Recall</span>
         </button>
 
-        <div className="flex space-x-8 items-center">
+        <div className="flex space-x-10 items-center">
           {CARDS_DATA.map((_, idx) => (
             <button
               key={idx}
               onClick={() => navigateTo(idx)}
-              className={`w-[4px] h-[4px] rounded-full transition-all duration-1000 ${
-                idx === currentIndex ? 'bg-[#e2b17a] scale-[3.5] shadow-[0_0_25px_rgba(226,177,122,0.6)]' : 'bg-white/5 hover:bg-white/20'
+              className={`w-[3px] h-[3px] rounded-full transition-all duration-1000 ${
+                idx === currentIndex ? 'bg-[#e2b17a] scale-[4] shadow-[0_0_30px_rgba(226,177,122,0.4)]' : 'bg-white/5 hover:bg-white/20'
               }`}
               aria-label={`Phase ${idx + 1}`}
             />
@@ -503,15 +547,15 @@ const App: React.FC = () => {
         <button
           onClick={goToNext}
           disabled={isTransitioning}
-          className="group flex items-center text-[11px] uppercase tracking-[0.5em] font-light text-white/10 hover:text-[#e2b17a] hover:opacity-100 transition-all duration-1000"
+          className="group flex items-center text-[12px] uppercase tracking-[0.6em] font-light text-white/10 hover:text-[#e2b17a] hover:opacity-100 transition-all duration-1000"
         >
-          <span className="hidden md:inline">{currentIndex === CARDS_DATA.length - 1 ? 'Replay' : 'Phase'}</span>
-          <span className="ml-4 transition-transform group-hover:translate-x-3 text-lg opacity-40">→</span>
+          <span className="hidden md:inline">{currentIndex === CARDS_DATA.length - 1 ? 'End' : 'Evolve'}</span>
+          <span className="ml-6 transition-transform group-hover:translate-x-4 text-xl opacity-20">→</span>
         </button>
       </div>
 
-      <div className="fixed bottom-6 text-center w-full opacity-5 pointer-events-none z-0">
-        <p className="text-[8px] uppercase tracking-[1.5em] text-white/80 font-extralight">Resonance — Crafted with Presence</p>
+      <div className="fixed bottom-8 text-center w-full opacity-5 pointer-events-none z-0">
+        <p className="text-[10px] uppercase tracking-[2em] text-white/80 font-extralight">A Shared Presence</p>
       </div>
     </div>
   );
